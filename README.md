@@ -3,7 +3,7 @@
 Compressing PBR materials into learned latent grids + a tiny MLP, decoded in real time on the GPU, compared against traditional BC compression.
 
 ## Milestones
-- [ ] M0 Repository setup
+- [X] M0 Repository setup
 - [ ] M1 BC baseline
 - [ ] M2 Single-texture MLP
 - [ ] M3 Latent grid + tiny decoder
