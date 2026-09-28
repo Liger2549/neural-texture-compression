@@ -10,12 +10,12 @@
 **Done**
 - Repo structure created (train/, runtime/, assets/, results/, docs/)
 - Git LFS tracking set up before adding any images
-- Python virtual environment + requirements.txt
+- Python virtual environment + requirements.txt (direct dependencies pinned; fresh install tested, CUDA works)
 - Material chosen: `Metal016` (ambientCG, 2K PNG). 7 channels: albedo RGB, normal XY (NormalDX), roughness, metalness. No AO (DECISIONS.md D5)
 - Other candidates (Ground054, Ground068, Marble016, Metal055A) compared and deleted before the first commit
 - README, ROADMAP, PROGRESS, DECISIONS created
 
 **Open issues**
-- `requirements.txt` only has the PyTorch index URL, no packages listed yet
+- None
 
 **Next:** M1 — BC baseline (compress the material with texconv, measure size and quality)
