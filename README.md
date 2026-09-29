@@ -13,3 +13,6 @@ Compressing PBR materials into learned latent grids + a tiny MLP, decoded in rea
 - [ ] M7 Real-time GPU decoder
 - [ ] M8 Fallback mode + auto selection
 - [ ] M9 Measurement + write-up
+
+## AI assistance
+This project is built with help from an AI coding assistant. What I did vs. what the assistant did is listed per milestone in [docs/AI-USAGE.md](docs/AI-USAGE.md).

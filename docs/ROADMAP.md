@@ -2,14 +2,14 @@
 
 ## 1. Project summary
 
-**Goal:** Build a neural texture compression (NTC) system from scratch. A PBR material (albedo, normal, roughness, metalness) is compressed into small learned latent grids plus a tiny MLP decoder. The decoder runs in real time inside a low-level GPU renderer (DirectX 12 or Vulkan — decided after M6), with a fallback path for GPUs that are too slow for per-pixel inference.
+**Goal:** Build a neural texture compression (NTC) system from scratch. Each PBR material (e.g. albedo, normal, roughness, metalness) is compressed separately into small learned latent grids plus its own tiny MLP decoder. Several compressed materials are then combined in one real-time scene. The decoder runs in real time inside a low-level GPU renderer (DirectX 12 or Vulkan — decided after M6), with a fallback path for GPUs that are too slow for per-pixel inference.
 
 **Why:** Neural texture compression is shipping AAA technology (Ubisoft shipped it in Assassin's Creed Mirage; NVIDIA, Intel and Microsoft are all building support). This project implements the technique end to end, from training to a real-time GPU decoder, with the engineering trade-offs a shipping game would face.
 
 **Definition of done (whole project):**
-- One material compressed with neural compression, decoded in a pixel shader in real time (DX12 or Vulkan).
+- 3–4 materials, each compressed separately with neural compression, shown together in one scene and decoded in a pixel shader in real time (DX12 or Vulkan).
 - A decode-on-load fallback mode, plus automatic mode selection (feature check + benchmark + user override).
-- A results table comparing BC baseline vs neural (size, bits per texel, PSNR/SSIM, frame time, VRAM).
+- A results table comparing BC baseline vs neural for each material (size, bits per texel, PSNR/SSIM), plus scene frame time and VRAM.
 - A README with images, the table, and design decisions that a reader can understand in 2 minutes.
 
 ## 2. Core concept (reference)
@@ -93,12 +93,13 @@ Rough pace: about one milestone per week. M3 and M7 take longer.
 ### M1 — Baseline (traditional BC compression)
 
 **Tasks**
-- Script `train/scripts/baseline.py`:
-  - Load the material; define the channel layout: albedo RGB (3), normal XY (2, Z reconstructed), roughness (1), metalness (1) = 7 channels. Material: Metal016, NormalDX, no AO (see DECISIONS.md D5).
+- Material config `train/configs/materials/Metal016.json`: folder, source map per channel, channel counts, color space, BC format. Metal016 layout: albedo RGB (3), normal XY (2, Z reconstructed), roughness (1), metalness (1) = 7 channels, NormalDX, no AO (see DECISIONS.md D5, D6).
+- Script `train/scripts/baseline.py --material <config>`:
+  - Load the material through its config (no hard-coded channel layout).
   - Compress with `texconv`: BC7 for albedo, BC5 for normal, BC4 for roughness / metalness.
   - Decode back and compute per-channel PSNR and SSIM vs the source.
   - Compute total size in MB and bits per texel (bpt), with and without mip chain.
-- Save `results/baseline.md` and comparison crops.
+- Save `results/<material>/baseline.md` and comparison crops.
 
 **Acceptance criteria**
 - A table: format per map, size, bpt, PSNR, SSIM.
@@ -180,9 +181,11 @@ Rough pace: about one milestone per week. M3 and M7 take longer.
 - Weights as fp16 binary.
 - Python **reference decoder** that loads only the exported file (no PyTorch model) and reproduces the output.
 - pytest: exported decode matches the in-memory model within a tight tolerance.
+- **Add 2–3 more materials** with different channel sets (e.g. one with AO, one without metalness). Write a config for each, then run baseline → train → export on each. Pick materials that show different kinds of detail.
 
 **Acceptance criteria**
 - Round trip test passes. File size reported and matches the bpt claims.
+- Every material has a baseline row, a trained `.ntex`, and a results row.
 
 **Key concepts:** why the export format must mirror exactly what the shader will do.
 
@@ -201,14 +204,14 @@ Choose DirectX 12 or Vulkan for the runtime, and whether the viewer is standalon
 ### M7 — Runtime: in-shader decoder
 
 **Tasks**
-- Minimal viewer in the chosen API (DX12 or Vulkan): window, orbit camera, a sphere and a plane, one directional/point light with animated movement, simple PBR (GGX) shading.
-- Load `.ntex`: latents as textures, MLP weights in a structured/storage buffer or constant/uniform buffer.
+- Minimal viewer in the chosen API (DX12 or Vulkan): window, orbit camera, a scene with several objects (e.g. spheres and a floor plane), each using a different material, one directional/point light with animated movement, simple PBR (GGX) shading.
+- Load one `.ntex` per material: latents as textures, MLP weights in a structured/storage buffer or constant/uniform buffer. Each material has its own decoder and channel count (e.g. one shader variant per output layout).
 - Pixel/fragment shader (HLSL via DXC unless decided otherwise): sample latents → MLP forward pass with plain loops (use 16-bit math when supported) → material channels → PBR shading.
-- Reference path: the same material using BC textures from M1.
+- Reference path: the same materials using BC textures from M1.
 - ImGui: mode switch (BC reference / neural), split-screen comparison, per-channel debug view (show albedo only, normal only, etc.).
 
 **Acceptance criteria**
-- Neural material renders correctly and visually matches the Python reference decoder (screenshot diff).
+- Every neural material renders correctly and visually matches the Python reference decoder (screenshot diff).
 - Runs in real time on the development GPU; frame time reported.
 
 **Key concepts:** how an MLP maps to shader code; cost per pixel = (inputs × hidden + hidden × hidden + hidden × outputs) multiply-adds.
@@ -237,7 +240,7 @@ Choose DirectX 12 or Vulkan for the runtime, and whether the viewer is standalon
 **Tasks**
 - GPU timestamp queries around the material pass; average over many frames.
 - VRAM accounting: sum of resource sizes per mode (plus a driver memory query for context: DXGI video memory info on DX12, VK_EXT_memory_budget on Vulkan).
-- Final table in `results/final.md`: for each mode → disk size, VRAM, bpt, PSNR/SSIM per channel, frame time.
+- Final table in `results/final.md`: for each material and mode → disk size, VRAM, bpt, PSNR/SSIM per channel; frame time for the whole scene.
 - README rewrite: hero image, 3-sentence summary, how it works diagram, results table, design decisions, limitations, future work, how to build and run.
 - Optional: 1–2 minute video / GIF of the split-screen comparison.
 
@@ -252,7 +255,7 @@ Choose DirectX 12 or Vulkan for the runtime, and whether the viewer is standalon
 - **Stochastic texture filtering** for neural outputs.
 - **Hardware-accelerated MLP** via cooperative vector / matrix features in the chosen API (where supported).
 - **Port the runtime to the other API** (DX12 ↔ Vulkan) to show the technique in both.
-- Multiple materials; shared vs per-material decoders.
+- Shared decoder across materials (vs one decoder per material).
 - Compare against NVIDIA RTX NTC or Intel's texture set neural compression SDK.
 - Streaming / partial decode of only the texture regions in use.
 
