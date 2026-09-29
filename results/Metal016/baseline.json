@@ -1,0 +1,65 @@
+{
+  "material": "Metal016",
+  "config": "train\\configs\\materials\\Metal016.json",
+  "resolution": [
+    2048,
+    2048
+  ],
+  "date": "2026-09-29T15:53:59",
+  "texconv": "default quality settings",
+  "maps": [
+    {
+      "map": "albedo",
+      "channels": 3,
+      "format": "BC7_UNORM_SRGB",
+      "color_space": "srgb",
+      "bytes": 4194304,
+      "bytes_with_mips": 5592432,
+      "bpt": 8.0,
+      "bpt_with_mips": 10.666717529296875,
+      "psnr": 47.823498060167886,
+      "ssim": 0.996985137462616
+    },
+    {
+      "map": "normal",
+      "channels": 2,
+      "format": "BC5_UNORM",
+      "color_space": "linear",
+      "bytes": 4194304,
+      "bytes_with_mips": 5592432,
+      "bpt": 8.0,
+      "bpt_with_mips": 10.666717529296875,
+      "psnr": 47.014045442715535,
+      "ssim": 0.9941641092300415,
+      "angle_error_deg": 0.5364046096801758
+    },
+    {
+      "map": "roughness",
+      "channels": 1,
+      "format": "BC4_UNORM",
+      "color_space": "linear",
+      "bytes": 2097152,
+      "bytes_with_mips": 2796216,
+      "bpt": 4.0,
+      "bpt_with_mips": 5.3333587646484375,
+      "psnr": 52.18308112024872,
+      "ssim": 0.9971022009849548
+    },
+    {
+      "map": "metalness",
+      "channels": 1,
+      "format": "BC4_UNORM",
+      "color_space": "linear",
+      "bytes": 2097152,
+      "bytes_with_mips": 2796216,
+      "bpt": 4.0,
+      "bpt_with_mips": 5.3333587646484375,
+      "psnr": 41.08176519842083,
+      "ssim": 0.9976128339767456
+    }
+  ],
+  "total_bytes": 12582912,
+  "total_bytes_with_mips": 16777296,
+  "total_bpt": 24.0,
+  "total_bpt_with_mips": 32.000152587890625
+}

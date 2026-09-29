@@ -112,4 +112,48 @@ Status: **Accepted** (in effect), **Open** (needs a choice), or **Superseded** (
 - *8 channels with a constant AO = 1.0:* keeps the roadmap's original layout but adds a fake channel that skews bpt comparisons (see above).
 - *Look for a metal material that also has AO:* possible, but Metal016 already shows the property that matters. Missing AO doesn't weaken the comparison.
 
-**Consequences:** The roadmap's 8-channel layout becomes 7 channels (M1 baseline, M3 decoder outputs). BC baseline total is BC7 + BC5 + 2 × BC4 = 8 + 8 + 4 + 4 = 24 bpt before mips. The other candidates were deleted before the first commit so they never enter Git LFS. They can be downloaded again from ambientCG if the "multiple materials" stretch goal happens.
+**Consequences:** The roadmap's 8-channel layout becomes 7 channels (M1 baseline, M3 decoder outputs). BC baseline total is BC7 + BC5 + 2 × BC4 = 8 + 8 + 4 + 4 = 24 bpt before mips. The other candidates were deleted before the first commit so they never enter Git LFS. They can be downloaded again from ambientCG when more materials are added (see D6).
+
+---
+
+## D6 — Multiple materials, each trained separately, combined in one scene
+
+**Date:** 2026-09-29 · **Milestone:** M1 (affects M1, M6, M7, M9) · **Status:** Accepted
+
+**Decision:** The project compresses 3–4 materials instead of one. Each material is trained on its own, with its own latent grids and decoder, and has its own channel layout. The M7 runtime shows them together in one scene.
+
+- Development and tuning happen on **Metal016** only (D5). The other materials are added around M6, once the pipeline works end to end.
+- Each material is described by a **config file** (`train/configs/materials/<name>.json`): folder, source map per channel, channel counts, color space, BC baseline format. No code hard-codes a channel count or layout.
+- Pick the extra materials to have **different channel sets** (e.g. one with AO, one without metalness), so the per-material layout is actually exercised.
+
+**Why:**
+- This is how NTC is used in real games: every material (texture set) is compressed separately with its own decoder. A scene with several materials is closer to a shipping game than one sphere.
+- Results on several materials show the method works in general, not just on one lucky material.
+- Making the layout config-driven costs little now and avoids a rewrite later.
+
+**Alternatives considered:**
+- *One material only (original plan):* simplest, but a weaker demo and a weaker results claim. "Multiple materials" was a stretch goal.
+- *Fixed 8-channel layout for all materials:* simple code, but missing maps need fake constant channels, which skews bpt comparisons (see D5), and it breaks on materials with other maps (opacity, emissive).
+- *One shared decoder for all materials:* a research question (quality vs savings). It stays a stretch goal.
+
+**Consequences:** Scripts take a `--material <config>` argument. Results are stored in `results/<material>/`. The `.ntex` header must record the channel layout (already planned in M6). The M7 shader needs a variant (or a max size) per output channel count. Training time grows with the number of materials, so keep it at 3–4.
+
+---
+
+## D7 — How the BC baseline is measured
+
+**Date:** 2026-09-29 · **Milestone:** M1 · **Status:** Accepted
+
+**Decision:**
+- **Albedo metrics are computed on sRGB-encoded values** (the 0–255 numbers stored in the file). All other maps are linear data and measured as stored.
+- **texconv runs with `-srgb` for sRGB channels**, on both encode and decode. Tested: with `-srgb` an uncompressed round trip is bit-exact; without it texconv applies a color conversion that shifts values (mean bias +0.12/255) before compression even starts.
+- **texconv default quality settings** for all formats (no `-bc x` maximum-quality BC7 mode).
+- **Size = DDS file size minus the DDS header(s)**, i.e. the bytes the GPU stores. bpt is reported without and with the full mip chain.
+- **Normals get an extra metric:** mean angle error in degrees between the rebuilt (and normalized) normals, because PSNR on XY doesn't say how wrong the lighting will be.
+
+**Why:** These choices make the baseline fair and repeatable. sRGB-encoded values are what the file stores and what BC compresses, so it's the natural space to compare in. Whether training uses linear or sRGB albedo is a separate M3 decision; linear metrics can be added then.
+
+**Alternatives considered:**
+- *Albedo metrics in linear space:* closer to what lighting uses, but not what BC was optimized for. Revisit in M3.
+- *Maximum BC7 quality (`-bc x`):* a stronger baseline, but much slower. Worth a quick A/B later to see if it changes the albedo row; if it does, use the stronger one so NTC isn't compared against a weak baseline.
+- *Theoretical sizes from the format spec:* same numbers for these formats, but measuring the real file catches mistakes (wrong format, missing mips).

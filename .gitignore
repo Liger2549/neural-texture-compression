@@ -20,3 +20,6 @@ runs/
    
 # Private notes for Claude Code
 CLAUDE.md
+
+# External tools (download separately, see README)
+tools/

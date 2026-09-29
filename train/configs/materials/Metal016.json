@@ -1,0 +1,10 @@
+{
+  "name": "Metal016",
+  "folder": "assets/Metal016_2K-PNG",
+  "channels": [
+    { "name": "albedo",    "file": "Metal016_2K-PNG_Color.png",     "count": 3, "color_space": "srgb",   "bc_format": "BC7_UNORM_SRGB" },
+    { "name": "normal",    "file": "Metal016_2K-PNG_NormalDX.png",  "count": 2, "color_space": "linear", "bc_format": "BC5_UNORM", "normal": true },
+    { "name": "roughness", "file": "Metal016_2K-PNG_Roughness.png", "count": 1, "color_space": "linear", "bc_format": "BC4_UNORM" },
+    { "name": "metalness", "file": "Metal016_2K-PNG_Metalness.png", "count": 1, "color_space": "linear", "bc_format": "BC4_UNORM" }
+  ]
+}
