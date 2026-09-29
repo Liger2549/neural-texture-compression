@@ -21,5 +21,5 @@ Rules I followed:
 - **AI:** wrote DECISIONS.md entries from our discussion, measured map statistics to compare candidate materials, pinned `requirements.txt`.
 
 ### M1 — BC baseline
-- **Me:** `rebuild_normal_z` (normal Z reconstruction) and `psnr` in `train/ntc/`; data inspection (channel layouts, NormalDX vs NormalGL, sRGB); interpreting the results; the decision to support multiple materials, each trained separately (D6).
+- **Me:** `rebuild_normal_z` (normal Z reconstruction) and `psnr` in `train/ntc/`; the BC explainer `docs/concepts/bc-compression.md` (AI filled in one sentence and reworded one); data inspection (channel layouts, NormalDX vs NormalGL, sRGB); interpreting the results; the decision to support multiple materials, each trained separately (D6).
 - **AI:** `train/scripts/baseline.py` (texconv calls, size measurement, tables, crops), material config loader, SSIM and normal angle error metrics, tests, checking texconv's sRGB handling.

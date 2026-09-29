@@ -1,12 +1,13 @@
 # Progress Log
 
-## 2026-09-29 — M1: BC baseline (in progress)
+## 2026-09-29 — M1: BC baseline ✅
 
 **Done**
 - Material config system: `train/configs/materials/Metal016.json` + config-driven loader (`train/ntc/material.py`). Multiple materials planned, each trained separately (DECISIONS.md D6)
 - `rebuild_normal_z` and `psnr` written by me; SSIM and normal angle error added (`train/ntc/metrics.py`)
 - `train/scripts/baseline.py`: texconv compress → decode → measure. Measurement choices in D7
 - 9 pytest tests passing (`train/tests/`)
+- `docs/concepts/bc-compression.md`: BC explainer (written by me)
 - `docs/AI-USAGE.md`: what I did vs. what the AI assistant did
 
 **Results (Metal016, 2048², `results/Metal016/baseline.md`)**
@@ -23,10 +24,9 @@
 - BC is already above 40 dB everywhere, so the realistic NTC goal is similar quality at fewer bits per texel.
 
 **Open issues**
-- `docs/concepts/bc-compression.md` explainer (me) not written yet
 - Optional: A/B BC7 default vs `-bc x` quality (D7)
 
-**Next:** finish the BC explainer, then close M1 and start M2 (single-texture MLP).
+**Next:** M2 — overfit a single texture with an MLP (plain vs Fourier features).
 
 ## 2026-09-28 — M0: Repository setup ✅
 
