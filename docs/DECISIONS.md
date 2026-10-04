@@ -157,3 +157,23 @@ Status: **Accepted** (in effect), **Open** (needs a choice), or **Superseded** (
 - *Albedo metrics in linear space:* closer to what lighting uses, but not what BC was optimized for. Revisit in M3.
 - *Maximum BC7 quality (`-bc x`):* a stronger baseline, but much slower. Worth a quick A/B later to see if it changes the albedo row; if it does, use the stronger one so NTC isn't compared against a weak baseline.
 - *Theoretical sizes from the format spec:* same numbers for these formats, but measuring the real file catches mistakes (wrong format, missing mips).
+
+---
+
+## D8 — M2 experiment setup (coordinate MLP)
+
+**Date:** 2026-10-04 · **Milestone:** M2 · **Status:** Accepted
+
+**Decision:**
+- **Add `matplotlib`** (pinned in `requirements.txt`) for the PSNR-over-steps plot and the side-by-side figure.
+- **Fourier features use log-spaced frequencies** `2^k·π`, k = 0 … 9 (10 frequencies). The highest one has a period of 4 texels on a 2048 texture, about the finest detail it can show.
+- **Albedo is trained and measured in sRGB-encoded values**, the same space as the BC baseline (D7). This is for M2 only; the linear vs sRGB training choice is still open for M3.
+- **Decoded output is rounded to 8 bits before measuring**, so PSNR is compared on the same footing as the decoded BC textures.
+- Same network for both runs (4 hidden layers × 256, ReLU, sigmoid output, Adam lr 1e-3, 5000 steps × 65,536 random texels), so the only difference is the input encoding.
+
+**Why:** M2 is a learning experiment, and a plot shows spectral bias far better than a table. Log-spaced frequencies are the simplest encoding that covers every scale from the whole texture down to a few texels.
+
+**Alternatives considered:**
+- *No new dependency (CSV + markdown table only):* lighter, but no curve for the write-up or README.
+- *Random Gaussian frequencies (Tancik et al. 2020):* similar quality in their results, but adds a tuning knob (the scale) and is harder to explain. Not needed here, since M3 replaces positional encoding with latent grids.
+- *More frequencies:* would target detail finer than one texel, which doesn't exist in the image.
