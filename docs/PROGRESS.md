@@ -1,5 +1,32 @@
 # Progress Log
 
+## 2026-10-04 — M2: Single-texture MLP ✅
+
+**Done**
+- `train/ntc/mlp.py`: coordinate MLP `(u, v) → RGB`, optional Fourier features. `fourier_features` written by me
+- `train/scripts/overfit.py`: trains on random texel batches, logs full-image PSNR every 250 steps, saves checkpoint crops, config and metrics to `results/Metal016/m2/<run>/`
+- `train/scripts/compare_m2.py`: side-by-side figure, PSNR curve, results table (`results/Metal016/m2/m2.md`)
+- `matplotlib` added (D8); 14 pytest tests passing
+- `docs/concepts/spectral-bias.md`: why plain MLPs are blurry (written by me, restructured and grammar-checked with AI)
+
+**Results (Metal016 albedo, 2048², 5000 steps, `results/Metal016/m2/m2.md`)**
+
+| Run | Params | bpt (fp16) | PSNR (dB) | SSIM |
+|---|---|---|---|---|
+| plain MLP | 198,915 | 0.76 | 22.31 | 0.361 |
+| Fourier features (10 freqs) | 208,643 | 0.80 | 25.91 | 0.469 |
+| BC7 baseline | | 8 | 47.82 | 0.997 |
+
+- Plain MLP: only the overall layout survives, a smooth blur (spectral bias).
+- Fourier features: +3.6 dB at the same size; patches and spots appear, but close-up crops are still soft.
+- One MLP can't memorize 4M texels of detail. This motivates M3: store the detail in a latent grid and keep the MLP small.
+
+**Open issues**
+- Linear vs sRGB albedo for training is still open (decide in M3, see D7/D8)
+- Before M3: skim NVIDIA's "Random-Access Neural Compression of Material Textures" (overview, architecture, results)
+
+**Next:** M3 — latent grid + tiny decoder.
+
 ## 2026-09-29 — M1: BC baseline ✅
 
 **Done**

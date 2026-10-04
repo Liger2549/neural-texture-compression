@@ -23,3 +23,7 @@ Rules I followed:
 ### M1 — BC baseline
 - **Me:** `rebuild_normal_z` (normal Z reconstruction) and `psnr` in `train/ntc/`; the BC explainer `docs/concepts/bc-compression.md` (AI filled in one sentence and reworded one); data inspection (channel layouts, NormalDX vs NormalGL, sRGB); interpreting the results; the decision to support multiple materials, each trained separately (D6).
 - **AI:** `train/scripts/baseline.py` (texconv calls, size measurement, tables, crops), material config loader, SSIM and normal angle error metrics, tests, checking texconv's sRGB handling.
+
+### M2 — Single-texture MLP
+- **Me:** `fourier_features` (Fourier feature encoding) in `train/ntc/mlp.py`; the concept write-up `docs/concepts/spectral-bias.md` (I wrote the content myself, then used AI to restructure it, fix grammar and correct two explanations); reviewing the results.
+- **AI:** the MLP model, `train/scripts/overfit.py` (training loop, logging, checkpoints), `train/scripts/compare_m2.py` (figures, table), tests, explaining spectral bias and the PyTorch idioms I needed.
