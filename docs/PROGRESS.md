@@ -1,5 +1,19 @@
 # Progress Log
 
+## 2026-10-13 — M3: Latent grid + tiny decoder (in progress)
+
+**Done**
+- Branch `m3-latent-grid` from `main` (after the M2 merge, #3)
+- Step-by-step plan in `docs/M3-STEPS.md`. From M3 on I write the core lines myself (with worked examples), the assistant writes plumbing
+- Step 1: `train/scripts/train_ntc.py` loads the material as `(H*W, 7)` targets + texel UVs and draws random batches of 65,536 texels
+- Step 2: `LatentGrid` in `train/ntc/latent.py`: learnable `(1, 8, 512, 512)` grid, start values `randn * 0.01`. Float32 cost: 16 bpt for all 7 channels (BC: 24 bpt)
+- Step 3: `LatentGrid.forward`: bilinear lookup with `F.grid_sample` (UV → `[-1, 1]`, `align_corners=False` = texel-centre convention like GPUs, `padding_mode="border"`), `(N, 2)` → `(N, 8)`. Checked with a 3-channel 2×2 test grid
+
+**Open issues**
+- sRGB vs linear albedo for training → D9 (recommended: sRGB, same as the BC baseline)
+
+**Next:** step 4 — tiny MLP decoder (8 → 64 → 64 → 7, sigmoid).
+
 ## 2026-10-04 — M2: Single-texture MLP ✅
 
 **Done**
