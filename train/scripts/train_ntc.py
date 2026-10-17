@@ -2,44 +2,92 @@
 
 Usage (from the repo root):
     .venv\\Scripts\\python.exe train/scripts/train_ntc.py
+    .venv\\Scripts\\python.exe train/scripts/train_ntc.py --run fast --steps 500
 """
+import argparse
+import json
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ntc.material import load_config, load_material  # noqa: E402
-from ntc.latent import LatentGrid # noqa: E402
-from overfit import texel_uvs  # noqa: E402
-
-MATERIAL = Path("train/configs/materials/Metal016.json")
-BATCH = 1 << 16  # random texels per step (65,536)
+from ntc.latent import NTCModel, weighted_l2  # noqa: E402
+from ntc.metrics import psnr  # noqa: E402
+from overfit import decode, texel_uvs  # noqa: E402
 
 
 def main() -> None:
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--material", type=Path, default=Path("train/configs/materials/Metal016.json"))
+    p.add_argument("--run", default="base", help="run name, results go to results/<material>/m3/<run>")
+    p.add_argument("--steps", type=int, default=5000)
+    p.add_argument("--batch", type=int, default=1 << 16, help="random texels per step")
+    p.add_argument("--lr-grid", type=float, default=1e-2, help="learning rate for the latent grid (higher)")
+    p.add_argument("--lr-mlp", type=float, default=1e-3, help="learning rate for the MLP (lower)")
+    p.add_argument("--normal-weight", type=float, default=2.0, help="loss weight for the normal channels")
+    p.add_argument("--log-every", type=int, default=250)
+    p.add_argument("--seed", type=int, default=0)
+    args = p.parse_args()
 
-    cfg = load_config(MATERIAL)
+    torch.manual_seed(args.seed)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    cfg = load_config(args.material)
+    out = Path("results") / cfg.name / "m3" / args.run
+    out.mkdir(parents=True, exist_ok=True)
+
+    # Step 1: the whole material as (H*W, C) values, plus the UV of every texel.
     ref = load_material(cfg)
     h, w, c = ref.shape
-
     target = torch.from_numpy(ref).to(device).reshape(-1, c)
-
     uvs = texel_uvs(h, w, device)
 
-    idx = torch.randint(0, h * w, (BATCH,), device=device)
-    uv_batch = uvs[idx]
-    value_batch = target[idx]
+    # Step 6: per-channel loss weights from the config (normals count more).
+    weights = torch.ones(c, device=device)
+    for ch in cfg.channels:
+        if ch.normal:
+            weights[ch.start:ch.start + ch.count] = args.normal_weight
 
-    print("target", tuple(target.shape), target.device, "min", target.min().item(), "max", target.max().item())
-    print("uv_batch", tuple(uv_batch.shape), "value_batch", tuple(value_batch.shape))
+    model = NTCModel(out_dim=c).to(device)
+    params = sum(p.numel() for p in model.parameters())
+    print(f"{args.run}: {params:,} params, {h}x{w}x{c} target, {device}")
 
-    grid = LatentGrid().to(device)
-    print("grid", tuple(grid.grid.shape), f"{grid.grid.numel():,} values", "min", grid.grid.min().item(), "max", grid.grid.max().item())
-    
-    codes = grid(uv_batch)
-    print("codes", tuple(codes.shape))
+    opt = torch.optim.Adam([
+        {"params": model.grid.parameters(), "lr": args.lr_grid},
+        {"params": model.mlp.parameters(), "lr": args.lr_mlp},
+    ])
+
+    curve = []  # (step, PSNR over all channels on the full material)
+    start = time.perf_counter()
+    for step in range(1, args.steps + 1):
+        # ── YOUR PART (7b): one training step ──
+        idx = torch.randint(0, h * w, (args.batch,), device=device)
+        pred = model(uvs[idx])
+        loss = weighted_l2(pred, target[idx], weights)
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+
+        if step % args.log_every == 0 or step == args.steps:
+            curve.append((step, psnr(ref, decode(model, uvs, h, w))))
+            print(f"step {step:6d}  loss {loss.item():.6f}  PSNR {curve[-1][1]:.2f} dB")
+    seconds = time.perf_counter() - start
+
+    torch.save(model.state_dict(), out / "model.pt")
+    info = {
+        "date": datetime.now().isoformat(timespec="seconds"),
+        "material": cfg.name,
+        "config": vars(args) | {"material": str(args.material)},
+        "params": params,
+        "train_seconds": round(seconds, 1),
+        "curve": curve,
+    }
+    (out / "train.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
+    print(f"done in {seconds:.0f}s: PSNR {curve[-1][1]:.2f} dB -> {out}")
+
 
 if __name__ == "__main__":
     main()
