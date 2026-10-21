@@ -1,4 +1,4 @@
-"""M3: latent grid + tiny MLP decoder (see docs/M3-STEPS.md)."""
+"""M3: latent grid + tiny MLP decoder (see docs/milestones/M3-STEPS.md)."""
 import torch
 import torch.nn.functional as F
 from torch import nn

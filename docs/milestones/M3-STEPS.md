@@ -2,6 +2,7 @@
 
 Goal: latent grid + tiny MLP decoder that reconstructs all 7 channels of Metal016 (see ROADMAP.md, M3).
 For each step, Claude explains the tools and shapes, I write the core model code (Claude writes the plumbing: logging, saving, eval, tests), then we review it and run a check.
+Step plans start at M3, when I began writing the core model code myself. M1 and M2 are summarized in [PROGRESS.md](../PROGRESS.md).
 
 ## Concept in one picture
 
@@ -37,18 +38,16 @@ UV ──► latent grid (512×512, 8 numbers each) ──► 8 numbers ──�
 - [x] **8. Eval** (`train/scripts/eval_ntc.py`)
   Full decode, per-channel PSNR/SSIM, normal angle error, bpt, comparison images vs BC.
   *Understand:* does it beat BC, and where does it fail?
-- [ ] **9. Tests + write-up**
+- [x] **9. Tests + write-up**
   pytest for the model, results row next to BC baseline, PROGRESS.md.
-
-## Next time (paused 2026-10-18)
-
-- [ ] Step 8 explain-back: why is our output blurry? (grid 512 vs texture 2048 → one grid point per 4×4 texels; bilinear blending can't make details smaller than that)
-- [ ] Step 9: Claude writes the tests, I write the results summary
-- [ ] AI-USAGE.md: M3 entry (I wrote the model, loss, and training step; Claude wrote the training plumbing, eval script, and tests)
-- [ ] Commit steps 4–8
+  Questions for my PROGRESS.md bullets:
+  1. Size: how does our bpt compare with BC?
+  2. Quality: which channel is best/worst, and how far are we from BC?
+  3. What does it look like? (`crops/normal.png`: blurry or sharp, where is the error?)
+  4. Why? (grid 512 vs texture 2048) and what fixes it in M4?
 
 ## Also to do
 
 - [ ] Experiments after step 7: try learning rates and loss weights, compare numbers
 - [ ] Decide sRGB vs linear albedo for training → DECISIONS.md D9 (recommended: sRGB, same as BC baseline)
-- [ ] README: tick M3
+- [x] README: tick M3

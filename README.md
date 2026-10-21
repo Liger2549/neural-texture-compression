@@ -6,7 +6,7 @@ Compressing PBR materials into learned latent grids + a tiny MLP, decoded in rea
 - [X] M0 Repository setup
 - [X] M1 BC baseline
 - [X] M2 Single-texture MLP
-- [ ] M3 Latent grid + tiny decoder
+- [X] M3 Latent grid + tiny decoder
 - [ ] M4 Multi-resolution + quantization
 - [ ] M5 Mipmaps
 - [ ] M6 Export format + reference decoder

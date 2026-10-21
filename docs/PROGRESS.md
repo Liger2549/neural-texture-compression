@@ -1,18 +1,37 @@
 # Progress Log
 
-## 2026-10-13 — M3: Latent grid + tiny decoder (in progress)
+## 2026-10-21 — M3: Latent grid + tiny decoder ✅
 
 **Done**
-- Branch `m3-latent-grid` from `main` (after the M2 merge, #3)
-- Step-by-step plan in `docs/M3-STEPS.md`. From M3 on I write the core lines myself (with worked examples), the assistant writes plumbing
-- Step 1: `train/scripts/train_ntc.py` loads the material as `(H*W, 7)` targets + texel UVs and draws random batches of 65,536 texels
-- Step 2: `LatentGrid` in `train/ntc/latent.py`: learnable `(1, 8, 512, 512)` grid, start values `randn * 0.01`. Float32 cost: 16 bpt for all 7 channels (BC: 24 bpt)
-- Step 3: `LatentGrid.forward`: bilinear lookup with `F.grid_sample` (UV → `[-1, 1]`, `align_corners=False` = texel-centre convention like GPUs, `padding_mode="border"`), `(N, 2)` → `(N, 8)`. Checked with a 3-channel 2×2 test grid
+- Branch `m3-latent-grid` from `main` (after the M2 merge, #3). Step-by-step plan in `docs/milestones/M3-STEPS.md`
+- `train/ntc/latent.py`, written by me:
+  - `LatentGrid`: learnable `(1, 8, 512, 512)` grid with a bilinear lookup (`F.grid_sample`, texel-centre convention like GPUs), `(N, 2)` UVs → `(N, 8)` codes
+  - `TinyMLP`: 8 → 64 → 64 → 7, ReLU, sigmoid output (5,191 params)
+  - `NTCModel`: lookup → MLP, `(N, 2)` → `(N, 7)`
+  - `weighted_l2`: per-channel MSE with configurable weights (normals ×2 by default)
+- `train/scripts/train_ntc.py`: Adam with two learning rates (grid 1e-2, MLP 1e-3), random batches of 65,536 texels, PSNR log every 250 steps. Optimizer and training step written by me, the rest by the AI
+- `train/scripts/eval_ntc.py`: full decode, per-channel PSNR/SSIM, normal angle error, bpt, crops vs BC. bpt line written by me, the rest by the AI
+- 8 new pytest tests (`train/tests/test_latent.py`), 22 in total, all passing
 
+**Results (Metal016, 2048², run `base`, 5,000 steps, 23 s on an RTX 3070 Laptop, `results/Metal016/m3/base/eval.md`)**
+
+| Map | PSNR ours (dB) | PSNR BC (dB) | SSIM ours | SSIM BC |
+|---|---|---|---|---|
+| albedo | 31.02 | 47.82 | 0.835 | 0.997 |
+| normal | 30.96 (3.31°) | 47.01 (0.54°) | 0.722 | 0.994 |
+| roughness | 38.20 | 52.18 | 0.925 | 0.997 |
+| metalness | 31.79 | 41.08 | 0.961 | 0.998 |
+| **Size** | **8.02 bpt** (2.1M params, fp16) | **24 bpt** | | |
+
+- Size: 8.02 bpt for all 7 channels, about 3× smaller than BC (24 bpt).
+- Quality: roughness is the best channel (38.20 dB) and normal the worst (30.96 dB, albedo almost the same). Every channel is still 9–17 dB below BC.
+- Look: our output is blurrier than the reference and fine detail is less visible. The error is highest where the texture has a lot of small detail (`crops/normal.png`).
+- Why: the grid is 512×512 for a 2048×2048 texture, so one grid point covers 4×4 texels, and bilinear blending between grid points can't make details smaller than that. M4 adds multi-resolution grids (a finer grid for small details) and quantization to keep the size low.
 **Open issues**
-- sRGB vs linear albedo for training → D9 (recommended: sRGB, same as the BC baseline)
+- Experiments not run yet: more steps (still +0.2 dB per 1,000 steps at step 5,000), learning rates, normal weight
+- sRGB vs linear albedo → D9. Trained on sRGB-encoded values (same as the BC baseline); decision not written down yet
 
-**Next:** step 4 — tiny MLP decoder (8 → 64 → 64 → 7, sigmoid).
+**Next:** M4 — multi-resolution grids + quantization.
 
 ## 2026-10-04 — M2: Single-texture MLP ✅
 
