@@ -27,3 +27,7 @@ Rules I followed:
 ### M2 — Single-texture MLP
 - **Me:** `fourier_features` (Fourier feature encoding) in `train/ntc/mlp.py`; the concept write-up `docs/concepts/spectral-bias.md` (I wrote the content myself, then used AI to restructure it, fix grammar and correct two explanations); reviewing the results.
 - **AI:** the MLP model, `train/scripts/overfit.py` (training loop, logging, checkpoints), `train/scripts/compare_m2.py` (figures, table), tests, explaining spectral bias and the PyTorch idioms I needed.
+
+### M3 — Latent grid + tiny decoder
+- **Me:** the whole model in `train/ntc/latent.py` (`LatentGrid` with the bilinear lookup, `TinyMLP`, `NTCModel`, `weighted_l2`); in `train/scripts/train_ntc.py`, loading the training data, the two-learning-rate optimizer and the training step; the bpt calculation in `train/scripts/eval_ntc.py`; reading the results (best/worst channel, where the output is blurry).
+- **AI:** explaining each step with worked examples before I wrote it, reviewing my code (it caught a wrong learning rate and a shape mismatch in my training step), the rest of `train_ntc.py` (settings, logging, saving), `train/scripts/eval_ntc.py` (per-channel metrics, BC comparison, crops), tests (`train/tests/test_latent.py`), writing the PROGRESS.md entry from my answers, explaining why the output is blurry (grid resolution), and drafting the new README with its comparison figure (`train/scripts/readme_figure.py`), which I reviewed.
