@@ -1,8 +1,9 @@
-"""M3: train a latent grid + tiny MLP decoder on a whole material (all channels at once).
+"""M3/M4: train latent grid(s) + tiny MLP decoder on a whole material (all channels at once).
 
 Usage (from the repo root):
-    .venv\\Scripts\\python.exe train/scripts/train_ntc.py
+    .venv\\Scripts\\python.exe train/scripts/train_ntc.py                    # M3 setup: one 512² grid, 8 channels
     .venv\\Scripts\\python.exe train/scripts/train_ntc.py --run fast --steps 500
+    .venv\\Scripts\\python.exe train/scripts/train_ntc.py --run c8f4 --channels 8 4 --sizes 256 1024
 """
 import argparse
 import json
@@ -23,7 +24,10 @@ from overfit import decode, texel_uvs  # noqa: E402
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--material", type=Path, default=Path("train/configs/materials/Metal016.json"))
-    p.add_argument("--run", default="base", help="run name, results go to results/<material>/m3/<run>")
+    p.add_argument("--milestone", default="m4", help="results go to results/<material>/<milestone>/<run>")
+    p.add_argument("--run", default="base", help="run name")
+    p.add_argument("--channels", type=int, nargs="+", default=[8], help="channels per latent grid, e.g. 8 4")
+    p.add_argument("--sizes", type=int, nargs="+", default=[512], help="size of each latent grid, e.g. 256 1024")
     p.add_argument("--steps", type=int, default=5000)
     p.add_argument("--batch", type=int, default=1 << 16, help="random texels per step")
     p.add_argument("--lr-grid", type=float, default=1e-2, help="learning rate for the latent grid (higher)")
@@ -35,8 +39,10 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if len(args.channels) != len(args.sizes):
+        p.error("--channels and --sizes need one value per grid")
     cfg = load_config(args.material)
-    out = Path("results") / cfg.name / "m3" / args.run
+    out = Path("results") / cfg.name / args.milestone / args.run
     out.mkdir(parents=True, exist_ok=True)
 
     # Step 1: the whole material as (H*W, C) values, plus the UV of every texel.
@@ -51,7 +57,7 @@ def main() -> None:
         if ch.normal:
             weights[ch.start:ch.start + ch.count] = args.normal_weight
 
-    model = NTCModel(out_dim=c).to(device)
+    model = NTCModel(out_dim=c, channels=args.channels, sizes=args.sizes).to(device)
     params = sum(p.numel() for p in model.parameters())
     print(f"{args.run}: {params:,} params, {h}x{w}x{c} target, {device}")
 

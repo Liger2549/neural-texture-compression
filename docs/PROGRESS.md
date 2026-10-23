@@ -1,5 +1,36 @@
 # Progress Log
 
+## 2026-10-23 — M4: Multi-resolution latents + quantization (in progress, steps 1–3 of 9)
+
+**Done**
+- Branch `m4-multires-quant` from `main` (after the M3 merge, #4). Step plan in `docs/milestones/M4-STEPS.md`
+- `train/ntc/latent.py`, written by me:
+  - `grid_bpt(size, channels, bits_per_value, tex_size)`: size of one grid in bits per texel
+  - `MultiResGrid`: several `LatentGrid`s in an `nn.ModuleList`; looks up each one and concatenates the codes, `(N, 2)` → `(N, sum of channels)`
+  - `NTCModel` now takes lists `channels`, `sizes`; the MLP input is the sum of the channels. Argument order is channels first everywhere
+- `train_ntc.py`: `--channels`, `--sizes`, `--milestone` flags; `eval_ntc.py` rebuilds the grids from `train.json` and still loads M3 checkpoints (same numbers as before). By the AI
+- 4 new pytest tests, 26 in total, all passing
+
+**Results (Metal016, 2048², 5,000 steps, fp16, no quantization yet, `results/Metal016/m4/<run>/train.json`)**
+
+| Run | Grids (channels × size²) | bpt | PSNR all channels (dB) |
+|---|---|---|---|
+| `f2` | 2 × 1024² | 8 | 30.99 |
+| `single` (M3 setup) | 8 × 512² | 8 | 31.67 |
+| `f4` | 4 × 1024² | 16 | 33.28 |
+| `c8f4` | 8 × 256² + 4 × 1024² | 18 | 33.88 |
+
+- Same size (8 bpt): `single` beats `f2`. A fine grid alone is not enough; 2 numbers per texel are too few to describe all 7 channels.
+- `f4` beats `single`: more numbers, and closer together (one grid point per 2×2 texels instead of 4×4), so smaller details survive.
+- `c8f4` vs `f4`: the coarse grid adds +0.6 dB for only +2 bpt. The coarse grid gives many channels cheaply, the fine grid gives resolution with few channels.
+- `c8f4` was still improving fastest at step 5,000 (+0.32 dB in the last 1,000 steps vs +0.21 for `single`): each fine grid point gets updated rarely, so more steps may help it most.
+
+**Open issues**
+- Sizes above are fp16. Quantization (steps 4–6) should shrink them: `c8f4` at 4-bit would be 4.5 bpt
+- Try more steps for multi-res configs
+
+**Next:** step 4 — `quantize(x, bits)`.
+
 ## 2026-10-21 — M3: Latent grid + tiny decoder ✅
 
 **Done**
