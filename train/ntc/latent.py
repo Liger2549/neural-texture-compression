@@ -10,13 +10,21 @@ class LatentGrid(nn.Module):
     def __init__(self, channels: int = 8, size: int = 512):
         super().__init__()
         self.grid = nn.Parameter(torch.randn(1, channels, size, size) * 0.01)
+        self.bits = 16      # target bit depth (16 = off, no quantization)
+        self.mode = "off"   # "off", "noise" or "ste"
 
     def forward(self, uv: torch.Tensor) -> torch.Tensor:
         """(N, 2) UVs in [0, 1] -> (N, channels) codes, bilinearly blended from the 4 nearest grid points."""
         
+        g = self.grid
+        if self.mode == "noise":
+            g = quantize_noise(g, self.bits)
+        elif self.mode == "ste":
+            g = quantize_ste(g, self.bits)
+        
         coords = (uv * 2 - 1).reshape(1, -1, 1, 2)
-        out = F.grid_sample(self.grid, coords, mode="bilinear", padding_mode="border", align_corners=False)
-        return out.reshape(self.grid.shape[1], -1).T
+        out = F.grid_sample(g, coords, mode="bilinear", padding_mode="border", align_corners=False)
+        return out.reshape(g.shape[1], -1).T
         
 class TinyMLP(nn.Module):
     """(N, in_dim) codes -> (N, out_dim) values in [0, 1]."""
@@ -76,5 +84,36 @@ class MultiResGrid(nn.Module):
         for g in self.grids:
             codes.append(g(uv))
         return torch.cat(codes, dim=1)
+
+def quantize(x: torch.Tensor, bits: int) -> torch.Tensor:
+    """Snap x onto 2**bits evenly spaced levels between its min and max, returned as floats."""
+    
+    lo, hi = x.min(), x.max()
+    levels = 2 ** bits - 1
+    step = (hi - lo) / levels
+    q = torch.clamp(torch.round((x - lo) / step), 0, levels)
+    return q * step + lo
+     
+def quantize_noise(x: torch.Tensor, bits: int) -> torch.Tensor:
+    """Training stand-in for quantize: add up to ±½ step of uniform noise instead of rounding."""
+    
+    lo, hi = x.min().detach(), x.max().detach()
+    levels = 2 ** bits - 1
+    step = (hi - lo) / levels
+    q = torch.clamp((x - lo) / step + torch.rand_like(x) - 0.5, 0, levels)
+    return q * step + lo
+    
+def quantize_ste(x: torch.Tensor, bits: int) -> torch.Tensor:
+    """Training version of quantize: forward rounds onto the levels, backward passes the gradient straight through."""
+    
+    lo, hi = x.min().detach(), x.max().detach()
+    levels = 2 ** bits - 1
+    step = (hi - lo) / levels
+    q = (x - lo) / step  
+    
+    q = q + (torch.round(q) - q).detach()
+    
+    # Clamp doesn't need, since its value is between min and max.    
+    return  q * step + lo
 
     

@@ -26,10 +26,10 @@ Size of one grid: `bpt = channels × bits × (grid_size / texture_size)²`
 - [x] **3. Model update** (`train/ntc/latent.py`, `train/scripts/train_ntc.py`)
   `NTCModel` uses `MultiResGrid`; MLP input size = sum of the grid channels.
   *Understand:* the full M4 decoder.
-- [ ] **4. Quantize** (`train/ntc/latent.py`)
+- [x] **4. Quantize** (`train/ntc/latent.py`)
   `quantize(x, bits)`: scale/offset from the grid's range, round, clamp, back to float.
   *Understand:* what 4-bit or 8-bit storage does to the codes.
-- [ ] **5. Noise injection**
+- [x] **5. Noise injection**
   Add ±½ step random noise instead of rounding.
   *Understand:* why rounding has no useful gradient, and how noise imitates rounding error.
 - [ ] **6. Straight-through estimator + schedule**

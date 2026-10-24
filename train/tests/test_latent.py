@@ -1,6 +1,6 @@
 import torch
 
-from ntc.latent import LatentGrid, MultiResGrid, NTCModel, TinyMLP, grid_bpt, weighted_l2
+from ntc.latent import LatentGrid, MultiResGrid, NTCModel, TinyMLP, grid_bpt, quantize, quantize_noise, quantize_ste, weighted_l2
 
 
 def test_grid_lookup_shape():
@@ -105,3 +105,53 @@ def test_model_multires_mlp_input_is_sum_of_channels():
     model = NTCModel(out_dim=7, channels=[8, 4], sizes=[4, 16], hidden=64)
     assert model(torch.rand(5, 2)).shape == (5, 7)
     assert model.mlp.net[0].in_features == 12
+
+
+def test_quantize_worked_example():
+    # 2 bits = 4 levels between min -0.3 and max 0.5, step 0.8 / 3.
+    x = torch.tensor([-0.3, 0.0, 0.2, 0.5])
+    assert torch.allclose(quantize(x, 2), torch.tensor([-0.3, -0.3 + 0.8 / 3, -0.3 + 1.6 / 3, 0.5]))
+
+
+def test_quantize_levels_and_max_error():
+    x = torch.randn(10_000)
+    for bits in (2, 4, 8):
+        xq = quantize(x, bits)
+        step = (x.max() - x.min()) / (2 ** bits - 1)
+        assert len(torch.unique(xq)) <= 2 ** bits
+        assert (xq - x).abs().max() <= step / 2 + 1e-5  # rounding error is at most half a step
+
+
+def test_quantize_noise_error_range_and_gradient():
+    torch.manual_seed(0)
+    x = torch.randn(10_000, requires_grad=True)
+    xn = quantize_noise(x, 4)
+    step = (x.max() - x.min()).item() / 15
+    assert (xn - x).abs().max() <= step / 2 + 1e-5      # same error size as rounding
+    assert len(torch.unique(xn)) > 16                    # but not snapped onto levels
+    xn.sum().backward()
+    inside = (x > x.min()) & (x < x.max())
+    assert (x.grad[inside] == 1).float().mean() > 0.99   # gradient passes through (round would give 0)
+
+
+def test_quantize_ste_rounds_forward_passes_gradient_back():
+    x = torch.randn(10_000, requires_grad=True)
+    xs = quantize_ste(x, 4)
+    assert torch.allclose(xs, quantize(x.detach(), 4), atol=1e-5)  # forward: the same levels as quantize
+    xs.sum().backward()
+    assert torch.all(x.grad == 1)                                   # backward: slope 1 everywhere, edges included
+
+
+def test_grid_modes():
+    torch.manual_seed(0)
+    grid = LatentGrid(channels=2, size=4)
+    uv = torch.rand(20, 2)
+    plain = grid(uv)
+    grid.bits = 2
+    grid.mode = "noise"
+    assert not torch.allclose(grid(uv), grid(uv))  # noise: random every call
+    grid.mode = "ste"
+    assert torch.equal(grid(uv), grid(uv))         # STE: deterministic
+    assert not torch.allclose(grid(uv), plain)     # ... and snapped onto the 4 levels
+    grid.mode = "off"
+    assert torch.equal(grid(uv), plain)
