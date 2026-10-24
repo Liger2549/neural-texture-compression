@@ -177,3 +177,36 @@ Status: **Accepted** (in effect), **Open** (needs a choice), or **Superseded** (
 - *No new dependency (CSV + markdown table only):* lighter, but no curve for the write-up or README.
 - *Random Gaussian frequencies (Tancik et al. 2020):* similar quality in their results, but adds a tuning knob (the scale) and is harder to explain. Not needed here, since M3 replaces positional encoding with latent grids.
 - *More frequencies:* would target detail finer than one texel, which doesn't exist in the image.
+
+---
+
+## D10 — Latent quantization: range and bit depths
+
+**Date:** 2026-10-24 · **Milestone:** M4 · **Status:** Accepted
+
+**Decision:**
+- **One scale/offset per grid, from the grid's own min and max.** `2**bits` evenly spaced levels between min and max; stored as one fp16 min + one fp16 step per grid (counted in the size).
+- **Grid bit depths 4 and 8** (16 = fp16, no quantization). MLP weights stay fp16.
+- **Quantize the grid before sampling**, so training sees the same bilinear blend of quantized codes that a GPU sampler would produce.
+
+**Why:** min/max is the simplest range that never clips a value, and it needs no tuning. Measured on `c8f4`: quantizing after training costs nothing at 8-bit (−0.02 dB) but 3.7 dB at 4-bit, so 4-bit needs quantization-aware training (D11).
+
+**Alternatives considered:**
+- *Fixed range (e.g. [−1, 1]) with clamping:* uses the levels better when a few outliers stretch the range (in `c8f4`'s fine grid, 98% of values use about 4 of the 16 levels at 4-bit), but needs a tuned range and clips values. Worth trying if 4-bit quality matters more later.
+- *Per-channel scale/offset:* better fit per channel, slightly more metadata. Not tried.
+- *Entropy coding (Huffman, zstd) of the quantized values:* the 4-bit fine grid has an entropy of only 1.7 bits/value, so it would shrink the file on disk, but variable-length codes break random access, so it can't shrink VRAM. A possible addition to the M6 export format.
+
+---
+
+## D11 — Quantization-aware training: noise only
+
+**Date:** 2026-10-25 · **Milestone:** M4 · **Status:** Accepted
+
+**Decision:** Train quantized grids with **uniform noise of ±½ step** for the whole run (`--ste-from 1.0`) instead of switching to the straight-through estimator (STE) for the last 30%. Keep the STE option as a flag. Default: `--ste-from 1.0`.
+
+**Why:** Measured, not assumed. On `c8f4` 4-bit, noise only beat noise → STE by 0.08 dB with two different seeds. In the M4 sweep (6 configs × 4/8-bit, seed 42), noise only was equal or better everywhere (within 0.2 dB), and 0.8 dB better on `full2` 4-bit. STE-only was the worst. The PSNR curves show why: with STE, values near a rounding boundary flip back and forth, and the quality stops improving. NVIDIA's NTC paper (Vaidyanathan et al. 2023) also trains with noise and no STE; at the end it quantizes and freezes the latents and fine-tunes only the MLP for 5% more steps (not tried here yet).
+
+**Alternatives considered:**
+- *Noise → STE (the roadmap's original plan):* no measurable gain here, extra complexity.
+- *STE only:* worst of the three on `c8f4` 4-bit (31.92 vs 32.23 dB).
+- *A lower learning rate in the STE phase:* might reduce the flipping. Not tried; goes together with the open LR-schedule idea.

@@ -29,7 +29,8 @@ def main() -> None:
     p.add_argument("--channels", type=int, nargs="+", default=[8], help="channels per latent grid, e.g. 8 4")
     p.add_argument("--sizes", type=int, nargs="+", default=[512], help="size of each latent grid, e.g. 256 1024")
     p.add_argument("--grid-bits", type=int, default=16, help="quantization-aware training to this many bits (16 = off)")
-    p.add_argument("--ste-from", type=float, default=0.7, help="fraction of steps after which noise switches to STE (1 = noise only)")
+    p.add_argument("--ste-from", type=float, default=1.0,
+                   help="fraction of steps after which noise switches to STE (1 = noise only, the default, see D11)")
     p.add_argument("--steps", type=int, default=5000)
     p.add_argument("--batch", type=int, default=1 << 16, help="random texels per step")
     p.add_argument("--lr-grid", type=float, default=1e-2, help="learning rate for the latent grid (higher)")
@@ -63,7 +64,7 @@ def main() -> None:
     for g in model.grid.grids:
         g.bits = args.grid_bits
     params = sum(p.numel() for p in model.parameters())
-    qat = f", QAT {args.grid_bits}-bit (STE from {args.ste_from:.0%})" if args.grid_bits < 16 else ""
+    qat = f", QAT {args.grid_bits}-bit" + (f" (STE from {args.ste_from:.0%})" if args.ste_from < 1 else ", noise only") if args.grid_bits < 16 else ""
     print(f"{args.run}: {params:,} params, {h}x{w}x{c} target, {device}{qat}")
 
     opt = torch.optim.Adam([

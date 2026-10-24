@@ -4,23 +4,46 @@ Compressing PBR materials into learned latent grids + a tiny MLP, decoded in rea
 
 ![Reference vs BC vs neural compression](docs/images/comparison.png)
 
-**Status:** work in progress. The training pipeline works end to end (M3): one model stores all 7 channels of a material in **8 bpt, 3× smaller than BC (24 bpt)**, but it is still blurrier. Next: multi-resolution grids and quantization-aware training (M4), then a real-time GPU decoder (M7).
+**Status:** work in progress. With multi-resolution grids and 4-bit quantization-aware training (M4), one model stores all 7 channels of a material in **2.5–6 bpt, 4–10× smaller than BC (24 bpt)**, at 31–33 dB PSNR. BC is still far sharper (46 dB), see [results](#results-so-far). Next: mipmaps (M5), then a real-time GPU decoder (M7).
 
 ## How it works
 
 ```
-UV ──► latent grid (512×512, 8 learned numbers per point) ──► 8 numbers ──► tiny MLP (8 → 64 → 64 → 7) ──► 7 channels
-       "where things are"                                                    "how to read a code"
+         ┌─ coarse grid (256², 8 ch) ─► 8 numbers ─┐   big shapes
+UV ──────┤                                           ├─ concat ─► 12 numbers ─► tiny MLP (12 → 64 → 64 → 7) ─► 7 channels
+         └─ fine grid (1024², 4 ch)  ─► 4 numbers ─┘   small detail
+
+each latent stored as a 4- or 8-bit integer (+ one fp16 min and step per grid)
 ```
 
 - **Per-material overfitting.** Each material gets its own model, trained only on that material. Gradient descent is the encoder; the trained parameters *are* the compressed file.
-- **Latent grid + shared decoder.** The detail lives in a learnable grid of codes, sampled bilinearly like a GPU texture. One tiny MLP (5,191 params) shared by every texel turns a code into albedo RGB, normal XY, roughness and metalness at once.
+- **Latent grids + shared decoder.** The detail lives in learnable grids of codes at several resolutions, sampled bilinearly like GPU textures. A coarse grid gives many numbers per texel cheaply; a fine grid gives resolution with few numbers. One tiny MLP (about 5,400 params) shared by every texel turns the codes into albedo RGB, normal XY, roughness and metalness at once.
+- **Quantization-aware training.** The grids are stored as 4- or 8-bit integers. During training the grids get ±½ step of random noise (a stand-in for rounding that still has a gradient), so the model learns codes that survive the final rounding. At 4-bit this recovers about 2 dB of the 3.7 dB that rounding a normally trained model costs.
 - **Training.** Random batches of 65,536 texels, per-channel weighted L2 loss (normals weighted ×2), Adam with a higher learning rate for the grid than for the MLP.
 - **Random access.** Every texel decodes on its own, so the decoder can run per pixel in a shader.
 
 ## Results so far
 
-Metal016 (2048², 7 channels), 5,000 steps (23 s on an RTX 3070 Laptop GPU). Full tables: [BC baseline](results/Metal016/baseline.md), [M2](results/Metal016/m2/m2.md), [M3](results/Metal016/m3/base/eval.md).
+Metal016 (2048², 7 channels), 5,000 steps per model (25–40 s on an RTX 3070 Laptop GPU). Full tables: [BC baseline](results/Metal016/baseline.md), [M2](results/Metal016/m2/m2.md), [M3](results/Metal016/m3/base/eval.md), [M4 sweep](results/Metal016/m4/sweep/sweep.md).
+
+### Quality vs size (M4)
+
+![Quality vs bits per texel: neural configs vs BC](results/Metal016/m4/sweep/rd_chart.png)
+
+| Model | Grids (channels × size²) | Size, all 7 channels | PSNR, all channels |
+|---|---|---|---|
+| BC (BC7 + BC5 + 2 × BC4) | | 24 bpt | 46.1 dB |
+| M3: one grid, fp16 | 8 × 512² | 8.02 bpt | 31.57 dB |
+| M4 `c8f2`, 4-bit QAT | 8 × 256² + 2 × 1024² | 2.52 bpt | 31.42 dB |
+| M4 `c8f4`, 4-bit QAT | 8 × 256² + 4 × 1024² | 4.52 bpt | 32.26 dB |
+| M4 `3lvl`, 4-bit QAT | 16 × 128² + 8 × 512² + 4 × 1024² | 6.27 bpt | 32.83 dB |
+| M4 `3lvl`, 8-bit | same | 12.52 bpt | 34.70 dB |
+
+- Multi-resolution + 4-bit QAT reaches M3's quality at **a third of the size** (2.5 vs 8 bpt).
+- 8-bit quantization is free (within 0.05 dB of fp16); 4-bit needs quantization-aware training.
+- No neural config gets near BC's quality: the best is 34.8 dB at 12.5 bpt (`3lvl`, 8-bit), 11 dB below BC at half its size.
+
+### M3 per map
 
 | Map | BC: PSNR (dB) | Neural M3: PSNR (dB) |
 |---|---|---|
@@ -40,14 +63,14 @@ How the model got here (albedo):
 
 M2 used a 10× smaller budget (about 0.8 bpt for albedo only), so the M2 → M3 jump is not like for like. M2 showed that a single MLP can't memorise fine detail (spectral bias); M3 moves the detail into the grid.
 
-**Where it fails:** details smaller than one grid cell (4×4 texels) get blurred, because bilinear blending can't make them. M4 adds finer grids at more resolutions, and quantization to keep the size down.
+**Where it fails:** fine detail is still blurred compared with BC. In M3 the limit was the grid resolution (one grid point per 4×4 texels); in M4 finer grids help, but every config levels off around 32–35 dB in 5,000 steps.
 
 ## Milestones
 - [X] M0 Repository setup
 - [X] M1 BC baseline
 - [X] M2 Single-texture MLP
 - [X] M3 Latent grid + tiny decoder ([step plan](docs/milestones/M3-STEPS.md))
-- [ ] M4 Multi-resolution + quantization
+- [X] M4 Multi-resolution + quantization ([step plan](docs/milestones/M4-STEPS.md))
 - [ ] M5 Mipmaps
 - [ ] M6 Export format + reference decoder
 - [ ] M7 Real-time GPU decoder
@@ -66,6 +89,12 @@ python -m venv .venv
 .venv\Scripts\python.exe train/scripts/baseline.py --material train/configs/materials/Metal016.json
 .venv\Scripts\python.exe train/scripts/train_ntc.py
 .venv\Scripts\python.exe train/scripts/eval_ntc.py
+
+# M4: two grids, 4-bit quantization-aware training (noise only), then the full sweep + chart
+.venv\Scripts\python.exe train/scripts/train_ntc.py --run c8f4_q4 --channels 8 4 --sizes 256 1024 --grid-bits 4
+.venv\Scripts\python.exe train/scripts/eval_ntc.py --run c8f4_q4
+.venv\Scripts\python.exe train/scripts/sweep_m4.py
+.venv\Scripts\python.exe train/scripts/plot_m4.py
 .venv\Scripts\python.exe -m pytest train/tests
 ```
 

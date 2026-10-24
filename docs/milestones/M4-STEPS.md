@@ -41,5 +41,5 @@ Size of one grid: `bpt = channels × bits × (grid_size / texture_size)²`
 - [x] **8. Sweep + chart**
   A few configs (grid sizes, channels, bit depths), PSNR vs bpt plot with the BC point.
   *Understand:* the rate–distortion trade-off.
-- [ ] **9. Tests + write-up**
+- [x] **9. Tests + write-up**
   pytest, results table, PROGRESS.md, optional `docs/concepts/quantization.md`.
