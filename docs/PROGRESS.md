@@ -1,5 +1,80 @@
 # Progress Log
 
+## 2026-10-25 — M4: Multi-resolution latents + quantization ✅
+
+**Done**
+- Branch `m4-multires-quant` from `main` (after the M3 merge, #4). Step plan in `docs/milestones/M4-STEPS.md`
+- `train/ntc/latent.py`, written by me:
+  - `grid_bpt(size, channels, bits_per_value, tex_size)`: size of one grid in bits per texel
+  - `MultiResGrid`: several `LatentGrid`s in an `nn.ModuleList`; looks up each one and concatenates the codes. `NTCModel` takes lists `channels`, `sizes` (channels first everywhere); the MLP input is the sum of the channels
+  - `quantize` (round onto `2**bits` levels between the grid's min and max), `quantize_noise` (±½ step uniform noise), `quantize_ste` (straight-through estimator; no clamp, because clamp gave 0 gradient to values on the edge levels)
+  - `LatentGrid.mode` / `bits`: the grid is quantized before sampling
+- `train_ntc.py`: the noise → STE schedule written by me; `--channels`, `--sizes`, `--grid-bits`, `--ste-from` flags and logging of the rounded model's PSNR by the AI
+- `eval_ntc.py`: fp16 round trip for grids and MLP stored at 16 bits written by me; `--grid-bits` (quantize after loading) and the size breakdown (grids, scale/offset, MLP) by the AI
+- `sweep_m4.py`, `plot_m4.py` (AI): 6 configs × 4 methods × 4/8-bit, chart and table in `results/Metal016/m4/sweep/`
+- 11 new pytest tests, 33 in total, all passing
+- Decisions: D10 (per-grid min/max range, 4/8-bit), D11 (noise-only QAT; default is now `--ste-from 1.0`)
+
+**Results 1: one grid vs several (fp16, 5,000 steps, `results/Metal016/m4/<run>/train.json`)**
+
+| Run | Grids (channels × size²) | bpt | PSNR all channels (dB) |
+|---|---|---|---|
+| `f2` | 2 × 1024² | 8 | 30.99 |
+| `single` (M3 setup) | 8 × 512² | 8 | 31.67 |
+| `f4` | 4 × 1024² | 16 | 33.28 |
+| `c8f4` | 8 × 256² + 4 × 1024² | 18 | 33.88 |
+
+- Same size (8 bpt): `single` beats `f2`. A fine grid alone is not enough; 2 numbers per texel are too few to describe all 7 channels.
+- `f4` beats `single`: more numbers, and closer together (one grid point per 2×2 texels instead of 4×4), so smaller details survive.
+- `c8f4` vs `f4`: the coarse grid adds +0.6 dB for only +2 bpt. The coarse grid gives many channels cheaply, the fine grid gives resolution with few channels.
+
+**Results 2: quantizing `c8f4` (`results/Metal016/m4/`)**
+
+| Grids | Method | bpt | PSNR all (dB) |
+|---|---|---|---|
+| fp16 | – | 18.02 | 33.88 |
+| 8-bit | quantized after training | 9.02 | 33.86 |
+| 4-bit | quantized after training | 4.52 | 30.22 |
+| 4-bit | QAT noise → STE (seed 0 / 1) | 4.52 | 32.15 / 32.31 |
+| 4-bit | QAT noise only (seed 0 / 1) | 4.52 | 32.23 / 32.39 |
+| 4-bit | QAT STE only | 4.52 | 31.92 |
+| 2-bit | quantized after training | 2.27 | 9.88 |
+
+- MLP in fp16 instead of fp32: −0.02 bpt, PSNR unchanged (32.23 dB both). The output is stored as 8 bits anyway, so the fp16 error disappears in the final rounding.
+
+**Results 3: sweep (6 configs, 5,000 steps, seed 42, `results/Metal016/m4/sweep/sweep.md`)**
+
+![quality vs bpt](../results/Metal016/m4/sweep/rd_chart.png)
+
+Best result per config and bit depth (QAT noise only), next to quantizing after training:
+
+| Config | Grids | 4-bit bpt | 4-bit PSNR (after → QAT) | 8-bit bpt | 8-bit PSNR (QAT) |
+|---|---|---|---|---|---|
+| `m8` | 8 × 512² | 2.02 | 27.07 → 29.86 | 4.02 | 31.58 |
+| `c8f2` | 8 × 256² + 2 × 1024² | 2.52 | 29.91 → 31.42 | 5.02 | 32.50 |
+| `c8f4` | 8 × 256² + 4 × 1024² | 4.52 | 30.22 → 32.26 | 9.02 | 33.77 |
+| `c16f4` | 16 × 256² + 4 × 1024² | 5.02 | 30.80 → 32.44 | 10.02 | 33.84 |
+| `3lvl` | 16 × 128² + 8 × 512² + 4 × 1024² | 6.27 | 31.28 → 32.83 | 12.52 | 34.70 |
+| `full2` | 2 × 2048² | 8.02 | 29.42 → 30.55 | 16.02 | 33.48 |
+| **BC** | BC7 + BC5 + 2 × BC4 | | | **24** | **46.1** |
+
+**My findings**
+1. **8-bit:** QAT doesn't help at 8-bit. An 8-bit step is 17× smaller than a 4-bit step, so rounding barely changes the codes: quantizing after training is already within 0.05 dB of fp16.
+2. **4-bit:** QAT gains 1.1–2.8 dB over quantizing after training. The best 4-bit model is `3lvl` with noise only (32.8 dB at 6.3 bpt). `m8` gains the most (+2.8 dB), probably because it has only one grid, so every rounding error goes straight into the MLP's input.
+3. **More grid or more bits?** At ~5 bpt both are about equal on this material: `c8f2` 8-bit gets 32.50 dB and `c16f4` 4-bit gets 32.44 dB, a smaller difference than changing the seed (0.16 dB). More bits make each stored value more accurate; more grid gives more detail and more numbers for the coarse shapes. Which one wins probably depends on the material's patterns.
+4. **Why `full2` is the worst:** it has one grid point per texel, so it can store fine detail everywhere, but only 2 numbers per texel for all 7 channels, and no coarse grid. The 2 numbers went mostly to albedo (its 8-bit albedo, 36.8 dB, is the best of all configs), while roughness and metalness are the worst of all configs. It also learns slowly: each of its 4M grid points is updated only about 300 times in 5,000 steps.
+5. **Acceptance:** No, not yet. The best neural result is 34.8 dB at 12.5 bpt, against BC's 46.1 dB at 24 bpt. These models only trained for 5,000 steps. Longer training might improve them; if it doesn't, this is the best this setup can do. Viewed as a whole texture, the 34.8 dB result doesn't look bad, and it uses half of BC's memory on this material. I don't want to jump to conclusions from PSNR alone: the real test is how it looks in a real renderer (M7–M9).
+
+**Open issues**
+- Closing the gap to BC, ideas from the NTC paper (Vaidyanathan et al. 2023): much longer training (250k iterations with ~8× bigger batches, vs our 5,000), cosine learning-rate decay to 0, a fixed quantization range with clamping in the backward pass only, a final phase with quantized latents frozen and only the MLP fine-tuned, and positional encoding as extra MLP input
+- Learning-rate schedule (cosine decay, or reduce-on-plateau + early stop): QAT runs flatten out around step 3,000 with a constant learning rate; fp16 runs are still improving at step 5,000
+- Entropy coding of the quantized grids for the file on disk (4-bit fine grid: 1.7 bits/value entropy): idea for M6, see D10
+- Fixed-range quantization (clip outliers) instead of min/max: might help 4-bit, see D10
+- Roughness got worse than M3 in some configs while normals improved (normal loss weight ×2)
+- sRGB vs linear albedo → D9, still not written down (from M3)
+
+**Next:** M4b — closing the gap (ablations from the NTC paper), then M5 — mipmaps.
+
 ## 2026-10-21 — M3: Latent grid + tiny decoder ✅
 
 **Done**

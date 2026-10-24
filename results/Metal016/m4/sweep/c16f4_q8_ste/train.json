@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-24T23:57:26",
+  "material": "Metal016",
+  "config": {
+    "material": "train\\configs\\materials\\Metal016.json",
+    "milestone": "m4/sweep",
+    "run": "c16f4_q8_ste",
+    "channels": [
+      16,
+      4
+    ],
+    "sizes": [
+      256,
+      1024
+    ],
+    "grid_bits": 8,
+    "ste_from": 0.7,
+    "steps": 5000,
+    "batch": 65536,
+    "lr_grid": 0.01,
+    "lr_mlp": 0.001,
+    "normal_weight": 2.0,
+    "log_every": 1000,
+    "seed": 42
+  },
+  "params": 5248839,
+  "train_seconds": 38.4,
+  "curve": [
+    [
+      1000,
+      32.20017489118922
+    ],
+    [
+      2000,
+      32.63538041198502
+    ],
+    [
+      3000,
+      33.088121919401665
+    ],
+    [
+      4000,
+      33.51800174743053
+    ],
+    [
+      5000,
+      33.86942834987741
+    ]
+  ]
+}

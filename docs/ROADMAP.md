@@ -157,6 +157,30 @@ Rough pace: about one milestone per week. M3 and M7 take longer.
 
 ---
 
+### M4b — Closing the gap (open-ended experiments)
+
+M4 ended 11 dB below BC. M4b tries the ideas from the NTC paper (Vaidyanathan et al. 2023) one at a time and keeps only what the numbers support. There is no fixed scope: I stop when the gains get small or I decide the time is better spent on M5.
+
+**Tasks**
+- Same-memory comparison, like the paper: BC at lower resolution (1024², 512²) upsampled to 2048², so BC becomes a curve on the quality vs bpt chart.
+- Ablation ladder, each change added alone on `c8f4` 4-bit (seed 42) and kept only if it helps:
+  - cosine learning-rate decay
+  - final phase: quantize and freeze the latents, fine-tune only the MLP
+  - longer training (20k–50k steps)
+  - positional encoding as extra MLP input
+  - learned interpolation for the fine grid (4 neighbouring codes concatenated instead of blended)
+  - fixed quantization range with clamping in the backward pass
+- Re-run the sweep with the best recipe; compare M4 vs M4b on one chart.
+- Record what was kept or dropped, and why, in DECISIONS.md.
+
+**Acceptance criteria**
+- An ablation table: each change, its PSNR and gain over the previous step.
+- An answer to "is the gap to BC training or model capacity?"
+
+**Key concepts:** ablation study, learning-rate schedules, iso-storage vs iso-quality comparison.
+
+---
+
 ### M5 — Mipmaps
 
 **Tasks**

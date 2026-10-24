@@ -1,8 +1,9 @@
-"""M3: train a latent grid + tiny MLP decoder on a whole material (all channels at once).
+"""M3/M4: train latent grid(s) + tiny MLP decoder on a whole material (all channels at once).
 
 Usage (from the repo root):
-    .venv\\Scripts\\python.exe train/scripts/train_ntc.py
+    .venv\\Scripts\\python.exe train/scripts/train_ntc.py                    # M3 setup: one 512² grid, 8 channels
     .venv\\Scripts\\python.exe train/scripts/train_ntc.py --run fast --steps 500
+    .venv\\Scripts\\python.exe train/scripts/train_ntc.py --run c8f4 --channels 8 4 --sizes 256 1024
 """
 import argparse
 import json
@@ -23,7 +24,13 @@ from overfit import decode, texel_uvs  # noqa: E402
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--material", type=Path, default=Path("train/configs/materials/Metal016.json"))
-    p.add_argument("--run", default="base", help="run name, results go to results/<material>/m3/<run>")
+    p.add_argument("--milestone", default="m4", help="results go to results/<material>/<milestone>/<run>")
+    p.add_argument("--run", default="base", help="run name")
+    p.add_argument("--channels", type=int, nargs="+", default=[8], help="channels per latent grid, e.g. 8 4")
+    p.add_argument("--sizes", type=int, nargs="+", default=[512], help="size of each latent grid, e.g. 256 1024")
+    p.add_argument("--grid-bits", type=int, default=16, help="quantization-aware training to this many bits (16 = off)")
+    p.add_argument("--ste-from", type=float, default=1.0,
+                   help="fraction of steps after which noise switches to STE (1 = noise only, the default, see D11)")
     p.add_argument("--steps", type=int, default=5000)
     p.add_argument("--batch", type=int, default=1 << 16, help="random texels per step")
     p.add_argument("--lr-grid", type=float, default=1e-2, help="learning rate for the latent grid (higher)")
@@ -35,8 +42,10 @@ def main() -> None:
 
     torch.manual_seed(args.seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if len(args.channels) != len(args.sizes):
+        p.error("--channels and --sizes need one value per grid")
     cfg = load_config(args.material)
-    out = Path("results") / cfg.name / "m3" / args.run
+    out = Path("results") / cfg.name / args.milestone / args.run
     out.mkdir(parents=True, exist_ok=True)
 
     # Step 1: the whole material as (H*W, C) values, plus the UV of every texel.
@@ -51,9 +60,12 @@ def main() -> None:
         if ch.normal:
             weights[ch.start:ch.start + ch.count] = args.normal_weight
 
-    model = NTCModel(out_dim=c).to(device)
+    model = NTCModel(out_dim=c, channels=args.channels, sizes=args.sizes).to(device)
+    for g in model.grid.grids:
+        g.bits = args.grid_bits
     params = sum(p.numel() for p in model.parameters())
-    print(f"{args.run}: {params:,} params, {h}x{w}x{c} target, {device}")
+    qat = f", QAT {args.grid_bits}-bit" + (f" (STE from {args.ste_from:.0%})" if args.ste_from < 1 else ", noise only") if args.grid_bits < 16 else ""
+    print(f"{args.run}: {params:,} params, {h}x{w}x{c} target, {device}{qat}")
 
     opt = torch.optim.Adam([
         {"params": model.grid.parameters(), "lr": args.lr_grid},
@@ -63,7 +75,13 @@ def main() -> None:
     curve = []  # (step, PSNR over all channels on the full material)
     start = time.perf_counter()
     for step in range(1, args.steps + 1):
-        # ── YOUR PART (7b): one training step ──
+        # ── YOUR PART (M4 6c): set every grid's mode for this step ("noise" early, "ste" late; skip if grid_bits is 16) ──
+        if (args.grid_bits != 16):
+            mode = "noise" if (step < args.steps * args.ste_from) else "ste"
+            for g in model.grid.grids:
+                g.mode = mode
+
+        # ── YOUR PART (M3 7b): one training step ──
         idx = torch.randint(0, h * w, (args.batch,), device=device)
         pred = model(uvs[idx])
         loss = weighted_l2(pred, target[idx], weights)
@@ -72,7 +90,13 @@ def main() -> None:
         opt.step()
 
         if step % args.log_every == 0 or step == args.steps:
+            # Log the quality the stored model would really have: rounded grids (STE forward = quantize), no noise.
+            modes = [g.mode for g in model.grid.grids]
+            for g in model.grid.grids:
+                g.mode = "ste" if args.grid_bits < 16 else "off"
             curve.append((step, psnr(ref, decode(model, uvs, h, w))))
+            for g, m in zip(model.grid.grids, modes):
+                g.mode = m
             print(f"step {step:6d}  loss {loss.item():.6f}  PSNR {curve[-1][1]:.2f} dB")
     seconds = time.perf_counter() - start
 
