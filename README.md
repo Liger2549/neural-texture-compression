@@ -71,6 +71,7 @@ M2 used a 10× smaller budget (about 0.8 bpt for albedo only), so the M2 → M3 
 - [X] M2 Single-texture MLP
 - [X] M3 Latent grid + tiny decoder ([step plan](docs/milestones/M3-STEPS.md))
 - [X] M4 Multi-resolution + quantization ([step plan](docs/milestones/M4-STEPS.md))
+- [ ] M4b Closing the gap (ablations from the NTC paper)
 - [ ] M5 Mipmaps
 - [ ] M6 Export format + reference decoder
 - [ ] M7 Real-time GPU decoder

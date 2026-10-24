@@ -73,7 +73,7 @@ Best result per config and bit depth (QAT noise only), next to quantizing after 
 - Roughness got worse than M3 in some configs while normals improved (normal loss weight ×2)
 - sRGB vs linear albedo → D9, still not written down (from M3)
 
-**Next:** M5 — mipmaps.
+**Next:** M4b — closing the gap (ablations from the NTC paper), then M5 — mipmaps.
 
 ## 2026-10-21 — M3: Latent grid + tiny decoder ✅
 
