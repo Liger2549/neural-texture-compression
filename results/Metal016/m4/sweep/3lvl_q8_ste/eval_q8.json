@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-25T00:02:59",
+  "material": "Metal016",
+  "run": "3lvl_q8_ste",
+  "channels": [
+    16,
+    8,
+    4
+  ],
+  "sizes": [
+    128,
+    512,
+    1024
+  ],
+  "resolution": [
+    2048,
+    2048
+  ],
+  "params": 6560071,
+  "grid_values": 6553600,
+  "mlp_params": 6471,
+  "grid_bits": 8,
+  "mlp_bits": 16,
+  "size_bytes": 6566554,
+  "bpt": 12.524707794189453,
+  "bc_bpt": 24.0,
+  "psnr_all": 34.706634992114154,
+  "maps": [
+    {
+      "map": "albedo",
+      "channels": 3,
+      "psnr": 34.108744856131395,
+      "ssim": 0.9210126399993896
+    },
+    {
+      "map": "normal",
+      "channels": 2,
+      "psnr": 33.95802743090123,
+      "ssim": 0.8696222305297852,
+      "angle_error_deg": 2.377190589904785
+    },
+    {
+      "map": "roughness",
+      "channels": 1,
+      "psnr": 40.44769136861585,
+      "ssim": 0.9531489014625549
+    },
+    {
+      "map": "metalness",
+      "channels": 1,
+      "psnr": 35.09551843485817,
+      "ssim": 0.9836191534996033
+    }
+  ]
+}

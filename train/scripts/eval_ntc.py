@@ -68,6 +68,14 @@ def main() -> None:
         with torch.no_grad():
             for g in model.grid.grids:
                 g.grid.copy_(quantize(g.grid, args.grid_bits))
+    elif args.grid_bits == 16:
+        with torch.no_grad():
+            for g in model.grid.grids:
+                g.grid.copy_(g.grid.half().float())
+    if args.mlp_bits == 16:
+        with torch.no_grad():
+            for p in model.mlp.parameters():
+                p.copy_(p.half().float())
     ours = decode(model, texel_uvs(h, w, device), h, w)  # (H, W, C), 8-bit quantized like a stored texture
 
     params = sum(p.numel() for p in model.parameters())

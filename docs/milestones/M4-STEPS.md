@@ -32,13 +32,13 @@ Size of one grid: `bpt = channels × bits × (grid_size / texture_size)²`
 - [x] **5. Noise injection**
   Add ±½ step random noise instead of rounding.
   *Understand:* why rounding has no useful gradient, and how noise imitates rounding error.
-- [ ] **6. Straight-through estimator + schedule**
+- [x] **6. Straight-through estimator + schedule**
   `x + (round(x) - x).detach()`; noise early in training, STE late.
   *Understand:* forward = real rounding, backward = pretend it's identity.
-- [ ] **7. fp16 MLP**
+- [x] **7. fp16 MLP**
   Cast MLP weights to half and back, compare PSNR.
   *Understand:* why the MLP's precision barely matters for size.
-- [ ] **8. Sweep + chart**
+- [x] **8. Sweep + chart**
   A few configs (grid sizes, channels, bit depths), PSNR vs bpt plot with the BC point.
   *Understand:* the rate–distortion trade-off.
 - [ ] **9. Tests + write-up**
